@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+audio_output/*.wav
+*.zip
+dist/
+build/
+*.spec
+.DS_Store

@@ -1,0 +1,92 @@
+name: Build LessonCast
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            name: LessonCast-Windows
+          - os: macos-13
+            name: LessonCast-Mac-Intel
+          - os: macos-latest
+            name: LessonCast-Mac-ARM
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install flask flask-cors soundfile numpy kokoro pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller \
+            --onedir \
+            --name "LessonCast" \
+            --add-data "index.html:." \
+            --collect-all kokoro \
+            --collect-all misaki \
+            --hidden-import soundfile \
+            --hidden-import flask_cors \
+            app.py
+
+      - name: Add launcher (Mac/Linux)
+        if: runner.os != 'Windows'
+        run: |
+          cat > dist/LessonCast/start.sh << 'EOF'
+          #!/bin/bash
+          cd "$(dirname "$0")"
+          mkdir -p audio_output
+          ./LessonCast &
+          sleep 3
+          open http://localhost:5000 2>/dev/null || xdg-open http://localhost:5000
+          EOF
+          chmod +x dist/LessonCast/start.sh
+
+      - name: Add launcher (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          @"
+          @echo off
+          cd /d "%~dp0"
+          mkdir audio_output 2>nul
+          start "" LessonCast.exe
+          timeout /t 3 >nul
+          start http://localhost:5000
+          "@ | Out-File -FilePath dist\LessonCast\start.bat -Encoding ASCII
+
+      - name: Zip it (Mac/Linux)
+        if: runner.os != 'Windows'
+        run: |
+          cd dist
+          zip -r ../${{ matrix.name }}.zip LessonCast/
+
+      - name: Zip it (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist\LessonCast -DestinationPath ${{ matrix.name }}.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}.zip
