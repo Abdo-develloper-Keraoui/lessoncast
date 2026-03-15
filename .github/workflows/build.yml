@@ -42,6 +42,10 @@ jobs:
             --collect-all kokoro \
             --collect-all misaki \
             --collect-all language_tags \
+            --collect-all espeakng_loader \
+            --collect-all addict \
+            --collect-all transformers \
+            --collect-all huggingface_hub \
             --hidden-import soundfile \
             --hidden-import flask_cors \
             app.py
@@ -50,7 +54,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          pyinstaller --onedir --name "LessonCast" --add-data "index.html;." --collect-all kokoro --collect-all misaki --collect-all language_tags --hidden-import soundfile --hidden-import flask_cors app.py
+          pyinstaller --onedir --name "LessonCast" --add-data "index.html;." --collect-all kokoro --collect-all misaki --collect-all language_tags --collect-all espeakng_loader --collect-all addict --collect-all transformers --collect-all huggingface_hub --hidden-import soundfile --hidden-import flask_cors app.py
 
       - name: Add launcher (macOS)
         if: runner.os != 'Windows'
