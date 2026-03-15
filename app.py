@@ -4,11 +4,21 @@ Model: Kokoro-TTS (https://github.com/hexgrad/kokoro)
 Run: python app.py
 """
 
+import multiprocessing
+multiprocessing.freeze_support()
+
+import os
+import sys
+
+if getattr(sys, 'frozen', False):
+    os.environ['HF_HOME'] = os.path.join(sys._MEIPASS, 'kokoro_model')
+    os.environ['TRANSFORMERS_OFFLINE'] = '1'
+    os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
+
 from flask import Flask, request, jsonify, send_file, render_template, send_from_directory
 from flask_cors import CORS
 import soundfile as sf
 import numpy as np
-import os
 import uuid
 import json
 import time
@@ -42,6 +52,7 @@ except Exception as e:
     pipeline_fr = None
     FR_LOADED = False
 
+
 def get_pipeline(voice_id):
     """Pick the right pipeline based on voice prefix."""
     if voice_id.startswith('ff_') or voice_id.startswith('fm_'):
@@ -50,6 +61,7 @@ def get_pipeline(voice_id):
         return pipeline_gb
     else:
         return pipeline_en
+
 
 # Available Kokoro voices
 VOICES = {
@@ -87,9 +99,6 @@ def generate():
     if not MODEL_LOADED:
         return jsonify({"error": "Kokoro model not loaded. Check console for details."}), 500
 
-    # ⚠️ Read ALL request data here, BEFORE defining stream()
-    # If request.json is accessed inside stream(), Flask's request context
-    # is already gone and you get a RuntimeError.
     data  = request.get_json(force=True)
     text  = data.get("text", "").strip()
     voice = data.get("voice", "af_heart")
@@ -97,8 +106,8 @@ def generate():
 
     if not text:
         return jsonify({"error": "No text provided"}), 400
-    if len(text) > 100000:
-        return jsonify({"error": "Text too long (max 100,000 characters)"}), 400
+    if len(text) > 500000:
+        return jsonify({"error": "Text too long (max 500,000 characters)"}), 400
 
     job_id   = str(uuid.uuid4())[:8]
     out_path = os.path.join(AUDIO_DIR, f"{job_id}.wav")
@@ -178,4 +187,4 @@ if __name__ == "__main__":
     print("─" * 35)
     print("🌐  Open: http://localhost:5000")
     print("─" * 35 + "\n")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
