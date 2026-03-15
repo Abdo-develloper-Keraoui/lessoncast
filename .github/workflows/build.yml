@@ -2,20 +2,24 @@ name: Build LessonCast
 
 on:
   push:
-    tags: ['v*']
-  workflow_dispatch:
+    tags: ['v*']          # run only when a tag like v1.0.0 is pushed
+  workflow_dispatch:       # allow manual trigger (for testing)
+
+# Grant the necessary permissions to create releases
+permissions:
+  contents: write
 
 jobs:
   build:
     strategy:
-      fail-fast: false        # ← don't cancel other builds if one fails
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             name: LessonCast-Windows
-          - os: macos-12              # ← was macos-13, now macos-12 for Intel
+          - os: macos-12              # Intel Mac
             name: LessonCast-Mac-Intel
-          - os: macos-latest
+          - os: macos-latest           # ARM Mac (Apple Silicon)
             name: LessonCast-Mac-ARM
 
     runs-on: ${{ matrix.os }}
@@ -23,14 +27,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: pip install flask flask-cors soundfile numpy kokoro pyinstaller
 
-      - name: Build with PyInstaller (Mac/Linux)
+      # Build with PyInstaller – separate commands for Windows vs others
+      - name: Build (macOS/Linux)
         if: runner.os != 'Windows'
         run: |
           pyinstaller \
@@ -43,13 +49,14 @@ jobs:
             --hidden-import flask_cors \
             app.py
 
-      - name: Build with PyInstaller (Windows)
+      - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           pyinstaller --onedir --name "LessonCast" --add-data "index.html;." --collect-all kokoro --collect-all misaki --hidden-import soundfile --hidden-import flask_cors app.py
 
-      - name: Add launcher (Mac/Linux)
+      # Add a simple launcher script (start.sh on macOS/Linux, start.bat on Windows)
+      - name: Add launcher (macOS/Linux)
         if: runner.os != 'Windows'
         run: |
           cat > dist/LessonCast/start.sh << 'EOF'
@@ -75,24 +82,29 @@ jobs:
           start http://localhost:5000
           "@ | Out-File -FilePath dist\LessonCast\start.bat -Encoding ASCII
 
-      - name: Zip it (Mac/Linux)
+      # Package everything into a ZIP archive
+      - name: Create ZIP (macOS/Linux)
         if: runner.os != 'Windows'
         run: cd dist && zip -r ../${{ matrix.name }}.zip LessonCast/
 
-      - name: Zip it (Windows)
+      - name: Create ZIP (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: Compress-Archive -Path dist\LessonCast -DestinationPath ${{ matrix.name }}.zip
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ matrix.name }}.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      # Upload the ZIP as a workflow artifact (always)
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}.zip
+
+      # Create a GitHub Release and attach the ZIP (only on tag pushes)
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.name }}.zip
+          generate_release_notes: true   # optional: auto-generate notes from commits
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
