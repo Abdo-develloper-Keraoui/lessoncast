@@ -24,19 +24,50 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      # ── Python 3.12 — matches your working venv exactly ─────────────────
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
+      # ── Cache pip to avoid re-downloading 500 MB every run ───────────────
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/AppData/Local/pip/Cache
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: pip-${{ runner.os }}-
+
+      # ── Install exact versions from your working venv ────────────────────
       - name: Install dependencies
-        run: pip install flask flask-cors soundfile numpy kokoro pyinstaller torch --extra-index-url https://download.pytorch.org/whl/cpu
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+          pip install torch==2.10.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
-      - name: Pre-download Kokoro model
-        run: python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='hexgrad/Kokoro-82M', cache_dir='kokoro_model/hub')"
-      
+      # ── Install spaCy model (en_core_web_sm) used by misaki/kokoro ───────
+      - name: Install spaCy model
+        run: |
+          pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+
+      # ── Pre-download Kokoro model so it's bundled, not fetched at runtime ─
+      - name: Download Kokoro model
+        run: |
+          python -c "
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='hexgrad/Kokoro-82M',
+              cache_dir='kokoro_model/hub'
+          )
+          print('Model downloaded.')
+          "
+
+      # ── Build — macOS ─────────────────────────────────────────────────────
       - name: Build (macOS)
-        if: runner.os != 'Windows'
+        if: runner.os == 'macOS'
         run: |
           pyinstaller \
             --onedir \
@@ -48,71 +79,115 @@ jobs:
             --collect-all language_tags \
             --collect-all espeakng_loader \
             --collect-all addict \
+            --collect-all spacy \
+            --collect-all en_core_web_sm \
+            --collect-all thinc \
             --collect-all transformers \
             --collect-all huggingface_hub \
+            --collect-all tokenizers \
+            --collect-all safetensors \
             --hidden-import soundfile \
             --hidden-import flask_cors \
+            --hidden-import num2words \
+            --hidden-import phonemizer \
             app.py
 
+      # ── Build — Windows ───────────────────────────────────────────────────
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          pyinstaller --onedir --name "LessonCast" --add-data "index.html;." --add-data "kokoro_model;kokoro_model" --collect-all kokoro --collect-all misaki --collect-all language_tags --collect-all espeakng_loader --collect-all addict --collect-all transformers --collect-all huggingface_hub --hidden-import soundfile --hidden-import flask_cors app.py
+          pyinstaller `
+            --onedir `
+            --name "LessonCast" `
+            --add-data "index.html;." `
+            --add-data "kokoro_model;kokoro_model" `
+            --collect-all kokoro `
+            --collect-all misaki `
+            --collect-all language_tags `
+            --collect-all espeakng_loader `
+            --collect-all addict `
+            --collect-all spacy `
+            --collect-all en_core_web_sm `
+            --collect-all thinc `
+            --collect-all transformers `
+            --collect-all huggingface_hub `
+            --collect-all tokenizers `
+            --collect-all safetensors `
+            --hidden-import soundfile `
+            --hidden-import flask_cors `
+            --hidden-import num2words `
+            --hidden-import phonemizer `
+            app.py
 
+      # ── Launcher — macOS ──────────────────────────────────────────────────
       - name: Add launcher (macOS)
-        if: runner.os != 'Windows'
+        if: runner.os == 'macOS'
         run: |
           cat > dist/LessonCast/start.sh << 'EOF'
-          #!/bin/bash
+          #!/usr/bin/env bash
           cd "$(dirname "$0")"
           mkdir -p audio_output
-          ./LessonCast &
-          APP_PID=$!
-          caffeinate -i -w $APP_PID &
-          sleep 3
-          open http://localhost:5000 2>/dev/null || xdg-open http://localhost:5000
-          wait $APP_PID
+
+          caffeinate -i ./LessonCast &
+          SERVER_PID=$!
+
+          echo "Starting LessonCast..."
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5000/status > /dev/null 2>&1 && break
+            sleep 1
+          done
+
+          open http://localhost:5000
+          echo "LessonCast is running. Press Ctrl+C to stop."
+          wait $SERVER_PID
           EOF
           chmod +x dist/LessonCast/start.sh
 
+      # ── Launcher — Windows ────────────────────────────────────────────────
       - name: Add launcher (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          @"
+          @'
           @echo off
           cd /d "%~dp0"
           mkdir audio_output 2>nul
+
           start "" LessonCast.exe
-          timeout /t 3 >nul
+
+          echo Waiting for server to start...
+          :wait
+          timeout /t 2 >nul
+          curl -sf http://localhost:5000/status >nul 2>&1
+          if errorlevel 1 goto wait
+
           start http://localhost:5000
-          start "" /B powershell -WindowStyle Hidden -File "%~dp0keepalive.ps1"
-          "@ | Out-File -FilePath dist\LessonCast\start.bat -Encoding ASCII
+          echo LessonCast is running. Close this window to stop.
+          pause
+          '@ | Out-File -FilePath dist\LessonCast\start.bat -Encoding ASCII
 
-          @"
-          `$wsh = New-Object -ComObject WScript.Shell
-          while (`$true) {
-              `$wsh.SendKeys('{F15}')
-              Start-Sleep -Seconds 59
-          }
-          "@ | Out-File -FilePath dist\LessonCast\keepalive.ps1 -Encoding UTF8
-
+      # ── Package — macOS ───────────────────────────────────────────────────
       - name: Create ZIP (macOS)
-        if: runner.os != 'Windows'
-        run: cd dist/LessonCast && zip -r ../../${{ matrix.name }}.zip .
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          zip -r --symlinks ../${{ matrix.name }}.zip LessonCast/
 
+      # ── Package — Windows ─────────────────────────────────────────────────
       - name: Create ZIP (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: Compress-Archive -Path dist\LessonCast\* -DestinationPath ${{ matrix.name }}.zip
 
+      # ── Upload artifact ───────────────────────────────────────────────────
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}.zip
 
+      # ── GitHub Release (tag pushes only) ──────────────────────────────────
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
