@@ -2,10 +2,9 @@ name: Build LessonCast
 
 on:
   push:
-    tags: ['v*']          # run only when a tag like v1.0.0 is pushed
-  workflow_dispatch:       # allow manual trigger (for testing)
+    tags: ['v*']
+  workflow_dispatch:
 
-# Grant the necessary permissions to create releases
 permissions:
   contents: write
 
@@ -17,9 +16,7 @@ jobs:
         include:
           - os: windows-latest
             name: LessonCast-Windows
-          - os: macos-12              # Intel Mac
-            name: LessonCast-Mac-Intel
-          - os: macos-latest           # ARM Mac (Apple Silicon)
+          - os: macos-latest
             name: LessonCast-Mac-ARM
 
     runs-on: ${{ matrix.os }}
@@ -35,8 +32,7 @@ jobs:
       - name: Install dependencies
         run: pip install flask flask-cors soundfile numpy kokoro pyinstaller
 
-      # Build with PyInstaller – separate commands for Windows vs others
-      - name: Build (macOS/Linux)
+      - name: Build (macOS)
         if: runner.os != 'Windows'
         run: |
           pyinstaller \
@@ -45,6 +41,7 @@ jobs:
             --add-data "index.html:." \
             --collect-all kokoro \
             --collect-all misaki \
+            --collect-all language_tags \
             --hidden-import soundfile \
             --hidden-import flask_cors \
             app.py
@@ -53,10 +50,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          pyinstaller --onedir --name "LessonCast" --add-data "index.html;." --collect-all kokoro --collect-all misaki --hidden-import soundfile --hidden-import flask_cors app.py
+          pyinstaller --onedir --name "LessonCast" --add-data "index.html;." --collect-all kokoro --collect-all misaki --collect-all language_tags --hidden-import soundfile --hidden-import flask_cors app.py
 
-      # Add a simple launcher script (start.sh on macOS/Linux, start.bat on Windows)
-      - name: Add launcher (macOS/Linux)
+      - name: Add launcher (macOS)
         if: runner.os != 'Windows'
         run: |
           cat > dist/LessonCast/start.sh << 'EOF'
@@ -64,8 +60,11 @@ jobs:
           cd "$(dirname "$0")"
           mkdir -p audio_output
           ./LessonCast &
+          APP_PID=$!
+          caffeinate -i -w $APP_PID &
           sleep 3
           open http://localhost:5000 2>/dev/null || xdg-open http://localhost:5000
+          wait $APP_PID
           EOF
           chmod +x dist/LessonCast/start.sh
 
@@ -80,31 +79,37 @@ jobs:
           start "" LessonCast.exe
           timeout /t 3 >nul
           start http://localhost:5000
+          start "" /B powershell -WindowStyle Hidden -File "%~dp0keepalive.ps1"
           "@ | Out-File -FilePath dist\LessonCast\start.bat -Encoding ASCII
 
-      # Package everything into a ZIP archive
-      - name: Create ZIP (macOS/Linux)
+          @"
+          `$wsh = New-Object -ComObject WScript.Shell
+          while (`$true) {
+              `$wsh.SendKeys('{F15}')
+              Start-Sleep -Seconds 59
+          }
+          "@ | Out-File -FilePath dist\LessonCast\keepalive.ps1 -Encoding UTF8
+
+      - name: Create ZIP (macOS)
         if: runner.os != 'Windows'
-        run: cd dist && zip -r ../${{ matrix.name }}.zip LessonCast/
+        run: cd dist/LessonCast && zip -r ../../${{ matrix.name }}.zip .
 
       - name: Create ZIP (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path dist\LessonCast -DestinationPath ${{ matrix.name }}.zip
+        run: Compress-Archive -Path dist\LessonCast\* -DestinationPath ${{ matrix.name }}.zip
 
-      # Upload the ZIP as a workflow artifact (always)
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}.zip
 
-      # Create a GitHub Release and attach the ZIP (only on tag pushes)
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.name }}.zip
-          generate_release_notes: true   # optional: auto-generate notes from commits
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
