@@ -30,7 +30,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install flask flask-cors soundfile numpy kokoro pyinstaller
+        run: pip install flask flask-cors soundfile numpy kokoro pyinstaller torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Pre-download Kokoro model
+        run: python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='hexgrad/Kokoro-82M', local_dir='kokoro_model')"
 
       - name: Build (macOS)
         if: runner.os != 'Windows'
@@ -39,6 +42,7 @@ jobs:
             --onedir \
             --name "LessonCast" \
             --add-data "index.html:." \
+            --add-data "kokoro_model:kokoro_model" \
             --collect-all kokoro \
             --collect-all misaki \
             --collect-all language_tags \
@@ -54,7 +58,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          pyinstaller --onedir --name "LessonCast" --add-data "index.html;." --collect-all kokoro --collect-all misaki --collect-all language_tags --collect-all espeakng_loader --collect-all addict --collect-all transformers --collect-all huggingface_hub --hidden-import soundfile --hidden-import flask_cors app.py
+          pyinstaller --onedir --name "LessonCast" --add-data "index.html;." --add-data "kokoro_model;kokoro_model" --collect-all kokoro --collect-all misaki --collect-all language_tags --collect-all espeakng_loader --collect-all addict --collect-all transformers --collect-all huggingface_hub --hidden-import soundfile --hidden-import flask_cors app.py
 
       - name: Add launcher (macOS)
         if: runner.os != 'Windows'
