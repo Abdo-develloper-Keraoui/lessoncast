@@ -11,15 +11,14 @@ Powered by [Kokoro-TTS](https://github.com/hexgrad/kokoro).
 
 | Platform | Download |
 |---|---|
-| Windows | [LessonCast-Windows.zip]() |
-| Mac (M1/M2/M3) | [LessonCast-Mac-ARM.zip]() |
+| Windows | [LessonCast-Windows.zip](https://github.com/Abdo-develloper-Keraoui/lessoncast/releases/latest) |
 
 1. Unzip
-2. **Mac:** run `./start.sh` — **Windows:** double-click `start.bat`
-3. Browser opens at `http://localhost:5000`
-4. Paste your script → pick a voice → Generate 🎉
+   **Windows:** double-click `start.bat`
+2. Browser opens automatically at `http://localhost:5000`
+3. Paste your script → pick a voice → hit Generate 🎉
 
-> First launch takes ~30 seconds while the AI model loads.
+> ⚠️ First launch takes ~30 seconds while the AI model loads. Don't close the terminal window.
 
 ---
 
@@ -31,6 +30,8 @@ python -m venv venv && source venv/bin/activate
 pip install flask flask-cors soundfile numpy kokoro
 python app.py
 ```
+
+Then open `http://localhost:5000` in your browser.
 
 ---
 
@@ -45,3 +46,7 @@ python app.py
 | Siwis | Female | French |
 
 ---
+
+## 📄 License
+
+MIT — free to use, modify, and distribute.
