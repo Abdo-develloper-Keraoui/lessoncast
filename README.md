@@ -9,9 +9,9 @@ Powered by [Kokoro-TTS](https://github.com/hexgrad/kokoro).
 
 ## ⬇️ Download & Run (no Python needed)
 
-| Platform | Download |
-|---|---|
-| Windows | [LessonCast-Windows.zip](https://github.com/Abdo-develloper-Keraoui/lessoncast/releases/latest) |
+| Platform | Download                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| Windows  | [LessonCast-Windows.zip](https://github.com/Abdo-develloper-Keraoui/lessoncast/releases/latest) |
 
 1. Unzip
    **Windows:** double-click `start.bat`
@@ -23,11 +23,13 @@ Powered by [Kokoro-TTS](https://github.com/hexgrad/kokoro).
 ---
 
 ## 🛠️ Run from source (developers)
+
 ```bash
 git clone https://github.com/Abdo-develloper-Keraoui/lessoncast.git
 cd lessoncast
 python -m venv venv && source venv/bin/activate
-pip install flask flask-cors soundfile numpy kokoro
+pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
 python app.py
 ```
 
@@ -37,13 +39,15 @@ Then open `http://localhost:5000` in your browser.
 
 ## 🎤 Voices
 
-| Voice | Gender | Accent |
-|---|---|---|
+| Voice                            | Gender | Accent           |
+| -------------------------------- | ------ | ---------------- |
 | Heart, Bella, Nicole, Sarah, Sky | Female | American English |
-| Adam, Michael | Male | American English |
-| Emma, Isabella | Female | British English |
-| George, Lewis | Male | British English |
-| Siwis | Female | French |
+| Adam, Michael                    | Male   | American English |
+| Emma, Isabella                   | Female | British English  |
+| George, Lewis                    | Male   | British English  |
+| Siwis                            | Female | French           |
+| Dora                             | Female | Spanish          |
+| Alex, Santa                      | Male   | Spanish          |
 
 ---
 
