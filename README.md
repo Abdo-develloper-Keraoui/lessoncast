@@ -2,6 +2,7 @@
 
 Convert any text or lesson script into a podcast-style audio file.
 Runs **100% locally** — no cloud, no API keys, no data leaves your machine.
+Use it when u have some down time and won't use the pc as it it feeds on your cpu, so use it in off hours
 
 Powered by [Kokoro-TTS](https://github.com/hexgrad/kokoro).
 
@@ -31,6 +32,9 @@ python -m venv venv && source venv/bin/activate
 pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 python app.py
+
+# this command is for windows to remain awake to be done seperately in a powershell window:
+$w = New-Object -ComObject WScript.Shell; while($true) { $w.SendKeys('{F15}'); Start-Sleep -Seconds 60 }
 ```
 
 Then open `http://localhost:5000` in your browser.
