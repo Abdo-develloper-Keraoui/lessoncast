@@ -52,6 +52,16 @@ except Exception as e:
     pipeline_fr = None
     FR_LOADED = False
 
+print("⏳ Loading Kokoro TTS model (Spanish)...")
+try:
+    pipeline_es = KPipeline(lang_code='e')   # Spanish
+    print("✅ Spanish pipeline loaded!")
+    ES_LOADED = True
+except Exception as e:
+    print(f"⚠️  Spanish pipeline failed (will still work for other languages): {e}")
+    pipeline_es = None
+    ES_LOADED = False
+
 
 def get_pipeline(voice_id):
     """Pick the right pipeline based on voice prefix."""
@@ -59,6 +69,8 @@ def get_pipeline(voice_id):
         return pipeline_fr
     elif voice_id.startswith('bf_') or voice_id.startswith('bm_'):
         return pipeline_gb
+    elif voice_id.startswith('ef_') or voice_id.startswith('em_'):
+        return pipeline_es
     else:
         return pipeline_en
 
@@ -80,6 +92,10 @@ VOICES = {
     "bm_lewis":    {"name": "Lewis",    "gender": "Male",   "accent": "British",  "lang": "EN"},
     # ── French ──
     "ff_siwis":    {"name": "Siwis",    "gender": "Female", "accent": "French",   "lang": "FR"},
+    # ── Spanish ──
+    "ef_dora":     {"name": "Dora",     "gender": "Female", "accent": "Spanish",  "lang": "ES"},
+    "em_alex":     {"name": "Alex",     "gender": "Male",   "accent": "Spanish",  "lang": "ES"},
+    "em_santa":    {"name": "Santa",    "gender": "Male",   "accent": "Spanish",  "lang": "ES"},
 }
 
 
@@ -90,7 +106,7 @@ def index():
 
 @app.route("/voices", methods=["GET"])
 def get_voices():
-    return jsonify({"voices": VOICES, "model_loaded": MODEL_LOADED, "fr_loaded": FR_LOADED})
+    return jsonify({"voices": VOICES, "model_loaded": MODEL_LOADED, "fr_loaded": FR_LOADED, "es_loaded": ES_LOADED})
 
 
 @app.route("/generate", methods=["POST"])
